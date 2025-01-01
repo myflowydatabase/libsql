@@ -632,27 +632,35 @@ fi
 #
 AC_ARG_ENABLE(wasm_runtime, 
 AS_HELP_STRING([--enable-wasm-runtime],[Enable WebAssembly runtime integration]))
-AC_ARG_ENABLE(wasm_runtime_dynamic, 
-AS_HELP_STRING([--enable-wasm-runtime-dynamic],[Enable WebAssembly runtime integration (dynamic linking)]))
 AC_MSG_CHECKING([whether to support WebAssembly integration])
-if test "$enable_wasm_runtime" = "yes" -o "$enable_wasm_runtime_dynamic" = "yes"; then
+AC_ARG_ENABLE(wasm_runtime_dynamic, 
+AS_HELP_STRING([--enable-wasm-runtime-dynamic],[Link with WebAssembly runtime dynamically]))
+AC_ARG_ENABLE(wasm_runtime_wasmedge, 
+AS_HELP_STRING([--enable-wasm-runtime-wasmedge],[Enable WebAssembly runtime integration (WasmEdge library)]))
+if test "$enable_wasm_runtime" = "yes" \
+    -o "$enable_wasm_runtime_dynamic" = "yes" \
+    -o "$enable_wasm_runtime_wasmedge" = "yes"; then
   AC_MSG_RESULT([yes])
   OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} -DLIBSQL_ENABLE_WASM_RUNTIME"
   AC_CHECK_PROG(CARGO_BIN, cargo)
-  if test "$enable_wasm_runtime" = "yes"; then
-    TARGET_OPT_WASM_RUNTIME_LINK='$(TOP)/.libs/libwblibsql.a'
-    OPT_WASM_RUNTIME_LIB="libwblibsql.a"
+  AC_MSG_CHECKING([how to set up WebAssembly runtime])
+  if test "$enable_wasm_runtime_dynamic" = "yes"; then
+    AC_MSG_RESULT([link dynamically])
+    OPT_WASM_RUNTIME=d
+  elif test "$enable_wasm_runtime_wasmedge" = "yes"; then
+    AC_MSG_RESULT([link libwasmedge])
+    OPT_FEATURE_FLAGS="${OPT_FEATURE_FLAGS} -DLIBSQL_ENABLE_WASM_RUNTIME_WASMEDGE"
+    AC_SEARCH_LIBS(WasmEdge_VMInstantiate, wasmedge, [], [AC_MSG_ERROR("WasmEdge library not found - install libwasmedge")])
+    OPT_WASM_RUNTIME=wasmedge
   else
-    TARGET_OPT_WASM_RUNTIME_LINK='-L$(TOP)/.libs/ -lwblibsql'
-    OPT_WASM_RUNTIME_LIB="libwblibsql.so"
+    AC_MSG_RESULT([link statically])
+    OPT_WASM_RUNTIME=y # static linking
   fi
 else
-  TARGET_OPT_WASM_RUNTIME_LINK=""
-  OPT_WASM_RUNTIME_LIB=""
   AC_MSG_RESULT([no])
+  OPT_WASM_RUNTIME=n
 fi
-AC_SUBST(TARGET_OPT_WASM_RUNTIME_LINK)
-AC_SUBST(OPT_WASM_RUNTIME_LIB)
+AC_SUBST(OPT_WASM_RUNTIME)
 
 ########
 # The --enable-all argument is short-hand to enable
@@ -842,5 +850,6 @@ AC_SUBST(BUILD_CFLAGS)
 AC_CONFIG_FILES([
 Makefile
 sqlite3.pc
+libsql.pc
 ])
 AC_OUTPUT
