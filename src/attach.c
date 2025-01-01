@@ -12,6 +12,7 @@
 ** This file contains code used to implement the ATTACH and DETACH commands.
 */
 #include "sqliteInt.h"
+#include "wal.h"
 
 #ifndef SQLITE_OMIT_ATTACH
 /*
@@ -85,9 +86,10 @@ static void attachFunc(
   char *zErr = 0;
   unsigned int flags;
   Db *aNew;                 /* New array of Db pointers */
-  Db *pNew;                 /* Db object for the newly attached database */
+  Db *pNew = 0;             /* Db object for the newly attached database */
   char *zErrDyn = 0;
   sqlite3_vfs *pVfs;
+  libsql_wal_methods *pWal;
 
   UNUSED_PARAMETER(NotUsed);
   zFile = (const char *)sqlite3_value_text(argv[0]);
@@ -105,13 +107,27 @@ static void attachFunc(
     /* This is not a real ATTACH.  Instead, this routine is being called
     ** from sqlite3_deserialize() to close database db->init.iDb and
     ** reopen it as a MemDB */
+    Btree *pNewBt = 0;
     pVfs = sqlite3_vfs_find("memdb");
+    pWal = libsql_wal_methods_find(NULL);
     if( pVfs==0 ) return;
-    pNew = &db->aDb[db->init.iDb];
-    if( pNew->pBt ) sqlite3BtreeClose(pNew->pBt);
-    pNew->pBt = 0;
-    pNew->pSchema = 0;
-    rc = sqlite3BtreeOpen(pVfs, "x\0", db, &pNew->pBt, 0, SQLITE_OPEN_MAIN_DB);
+    rc = sqlite3BtreeOpen(pVfs, pWal, "x\0", db, &pNewBt, 0, SQLITE_OPEN_MAIN_DB);
+    if( rc==SQLITE_OK ){
+      Schema *pNewSchema = sqlite3SchemaGet(db, pNewBt);
+      if( pNewSchema ){
+        /* Both the Btree and the new Schema were allocated successfully.
+        ** Close the old db and update the aDb[] slot with the new memdb
+        ** values.  */
+        pNew = &db->aDb[db->init.iDb];
+        if( ALWAYS(pNew->pBt) ) sqlite3BtreeClose(pNew->pBt);
+        pNew->pBt = pNewBt;
+        pNew->pSchema = pNewSchema;
+      }else{
+        sqlite3BtreeClose(pNewBt);
+        rc = SQLITE_NOMEM;
+      }
+    }
+    if( rc ) goto attach_error;
   }else{
     /* This is a real ATTACH
     **
@@ -155,7 +171,7 @@ static void attachFunc(
     ** or may not be initialized.
     */
     flags = db->openFlags;
-    rc = sqlite3ParseUri(db->pVfs->zName, zFile, &flags, &pVfs, &zPath, &zErr);
+    rc = sqlite3ParseUri(db->pVfs->zName, db->pWalMethods->zName, zFile, &flags, &pVfs, &pWal, &zPath, &zErr);
     if( rc!=SQLITE_OK ){
       if( rc==SQLITE_NOMEM ) sqlite3OomFault(db);
       sqlite3_result_error(context, zErr, -1);
@@ -164,7 +180,7 @@ static void attachFunc(
     }
     assert( pVfs );
     flags |= SQLITE_OPEN_MAIN_DB;
-    rc = sqlite3BtreeOpen(pVfs, zPath, db, &pNew->pBt, 0, flags);
+    rc = sqlite3BtreeOpen(pVfs, pWal, zPath, db, &pNew->pBt, 0, flags);
     db->nDb++;
     pNew->zDbSName = sqlite3DbStrDup(db, zName);
   }
@@ -224,7 +240,7 @@ static void attachFunc(
   }
 #endif
   if( rc ){
-    if( !REOPEN_AS_MEMDB(db) ){
+    if( ALWAYS(!REOPEN_AS_MEMDB(db)) ){
       int iDb = db->nDb - 1;
       assert( iDb>=2 );
       if( db->aDb[iDb].pBt ){
@@ -340,6 +356,8 @@ static void codeAttach(
   Vdbe *v;
   sqlite3* db = pParse->db;
   int regArgs;
+
+  if( SQLITE_OK!=sqlite3ReadSchema(pParse) ) goto attach_end;
 
   if( pParse->nErr ) goto attach_end;
   memset(&sName, 0, sizeof(NameContext));

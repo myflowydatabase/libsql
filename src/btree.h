@@ -41,9 +41,11 @@ typedef struct BtCursor BtCursor;
 typedef struct BtShared BtShared;
 typedef struct BtreePayload BtreePayload;
 
+typedef struct libsql_wal_methods libsql_wal_methods;
 
 int sqlite3BtreeOpen(
   sqlite3_vfs *pVfs,       /* VFS to use with this b-tree */
+  libsql_wal_methods *pWal,/* WAL methods to use with this b-tree */
   const char *zFilename,   /* Name of database file to open */
   sqlite3 *db,             /* Associated database connection */
   Btree **ppBtree,         /* Return open Btree* here */
@@ -183,7 +185,7 @@ int sqlite3BtreeNewDb(Btree *p);
 **     reduce network bandwidth.
 **
 ** Note that BTREE_HINT_FLAGS with BTREE_BULKLOAD is the only hint used by
-** standard SQLite.  The other hints are provided for extentions that use
+** standard SQLite.  The other hints are provided for extensions that use
 ** the SQLite parser and code generator but substitute their own storage
 ** engine.
 */
@@ -329,7 +331,15 @@ const void *sqlite3BtreePayloadFetch(BtCursor*, u32 *pAmt);
 u32 sqlite3BtreePayloadSize(BtCursor*);
 sqlite3_int64 sqlite3BtreeMaxRecordSize(BtCursor*);
 
-char *sqlite3BtreeIntegrityCheck(sqlite3*,Btree*,Pgno*aRoot,int nRoot,int,int*);
+int sqlite3BtreeIntegrityCheck(
+  sqlite3 *db,  /* Database connection that is running the check */
+  Btree *p,     /* The btree to be checked */
+  Pgno *aRoot,  /* An array of root pages numbers for individual trees */
+  int nRoot,    /* Number of entries in aRoot[] */
+  int mxErr,    /* Stop reporting errors after this many */
+  int *pnErr,   /* OUT: Write number of errors seen to this variable */
+  char **pzOut  /* OUT: Write the error message string here */
+);
 struct Pager *sqlite3BtreePager(Btree*);
 i64 sqlite3BtreeRowCountEst(BtCursor*);
 
@@ -367,6 +377,8 @@ void sqlite3BtreeCursorList(Btree*);
 #endif
 
 int sqlite3BtreeTransferRow(BtCursor*, BtCursor*, i64);
+
+void sqlite3BtreeClearCache(Btree*);
 
 /*
 ** If we are not using shared cache, then there is no need to

@@ -1,0 +1,13 @@
+# Package Information for pkg-config
+
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libSQL
+Description: Open contribution fork of SQLite
+Version: 3.45.1
+Libs: -L${libdir} -llibsql
+Libs.private: -lm -lz 
+Cflags: -I${includedir}

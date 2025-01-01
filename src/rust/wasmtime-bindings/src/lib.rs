@@ -1,4 +1,4 @@
-use std::ffi::{c_void, CStr};
+use std::ffi::{c_char, c_void, CStr};
 use wasmtime::{Config, Engine, Instance, Module, Store, Val};
 
 const LIBSQL_INTEGER: i8 = 1;
@@ -140,7 +140,7 @@ pub fn libsql_run_wasm(
             return;
         }
     };
-    let func_name: &str = match unsafe { CStr::from_ptr(func_name as *const i8) }.to_str() {
+    let func_name: &str = match unsafe { CStr::from_ptr(func_name as *const c_char) }.to_str() {
         Ok(s) => s,
         Err(e) => {
             let err = format!("Function name is not valid utf-8: {}", e);
@@ -195,7 +195,8 @@ pub fn libsql_run_wasm(
             )),
             LIBSQL_TEXT => {
                 let text: &str = unsafe {
-                    match CStr::from_ptr(((*api).libsql_value_text)(arg) as *const i8).to_str() {
+                    match CStr::from_ptr(((*api).libsql_value_text)(arg) as *const c_char).to_str()
+                    {
                         Ok(s) => s,
                         Err(e) => {
                             let err = format!("Function name is not valid utf-8: {}", e);
@@ -210,8 +211,8 @@ pub fn libsql_run_wasm(
                 };
                 let text_len = unsafe { ((*api).libsql_value_bytes)(arg) } as usize;
 
-                if mem_offset + text_len + 1 > mem_size {
-                    let delta = (text_len + 1 + 65535) / 65536;
+                if mem_offset + text_len + 2 > mem_size {
+                    let delta = (text_len + 2 + 65535) / 65536;
                     match memory.grow(&mut store, delta as u64) {
                         Ok(_) => (),
                         Err(e) => {
@@ -334,7 +335,7 @@ pub fn libsql_run_wasm(
                 LIBSQL_TEXT => {
                     let result_str = unsafe {
                         CStr::from_ptr(
-                            (memory.data(&store).as_ptr() as *const i8).offset(v as isize + 1),
+                            (memory.data(&store).as_ptr() as *const c_char).offset(v as isize + 1),
                         )
                     };
                     let result_ptr = alloc_slice(api, result_str.to_bytes_with_nul());
