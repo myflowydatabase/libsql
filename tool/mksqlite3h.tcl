@@ -40,8 +40,15 @@ set TOP [lindex $argv 0]
 #
 set useapicall 0
 
+# Include sqlite3recover.h?
+#
+set enable_recover 0
+
 if {[lsearch -regexp [lrange $argv 1 end] {^-+useapicall}] != -1} {
   set useapicall 1
+}
+if {[lsearch -regexp [lrange $argv 1 end] {^-+enable-recover}] != -1} {
+  set enable_recover 1
 }
 
 # Get the SQLite version number (ex: 3.6.18) from the $TOP/VERSION file.
@@ -80,6 +87,9 @@ set declpattern4 \
 set declpattern5 \
     {^ *([a-zA-Z][a-zA-Z_0-9 ]+ \**)(sqlite3rebaser_[_a-zA-Z0-9]+)(\(.*)$}
 
+set declpatternlibsql1 \
+    {^ *([a-zA-Z][a-zA-Z_0-9 ]+ \**)(libsql_[_a-zA-Z0-9]+)(\(.*)$}
+
 # Force the output to use unix line endings, even on Windows.
 fconfigure stdout -translation lf
 
@@ -88,7 +98,13 @@ set filelist [subst {
   $TOP/ext/rtree/sqlite3rtree.h
   $TOP/ext/session/sqlite3session.h
   $TOP/ext/fts5/fts5.h
+  $TOP/src/page_header.h
+  $TOP/src/wal.h
+  $TOP/ext/udf/wasm_bindings.h
 }]
+if {$enable_recover} {
+  lappend filelist "$TOP/ext/recover/sqlite3recover.h"
+}
 
 # These are the functions that accept a variable number of arguments.  They
 # always need to use the "cdecl" calling convention even when another calling
@@ -118,6 +134,9 @@ foreach file $filelist {
     # line when copying sqlite3rtree.h into sqlite3.h.
     #
     if {[string match {*#include*[<"]sqlite3.h[>"]*} $line]} continue
+    # File wal.h contains a line "#include "page_header.h". Omit this
+    # line when copying wal.h into sqlite3.h.
+    if {[string match {*#include*[<"]page_header.h[>"]*} $line]} continue
 
     regsub -- --VERS--           $line $zVersion line
     regsub -- --VERSION-NUMBER-- $line $nVersion line
@@ -132,7 +151,8 @@ foreach file $filelist {
           [regexp $declpattern2 $line all rettype funcname rest] || \
           [regexp $declpattern3 $line all rettype funcname rest] || \
           [regexp $declpattern4 $line all rettype funcname rest] || \
-          [regexp $declpattern5 $line all rettype funcname rest]} {
+          [regexp $declpattern5 $line all rettype funcname rest] || \
+          [regexp $declpatternlibsql1 $line all rettype funcname rest]} {
         set line SQLITE_API
         append line " " [string trim $rettype]
         if {[string index $rettype end] ne "*"} {

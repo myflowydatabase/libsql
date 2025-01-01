@@ -40,11 +40,14 @@ set help {Usage: tclsh mksqlite3c.tcl <options>
 set addstatic 1
 set linemacros 0
 set useapicall 0
+set enable_recover 0
 set srcdir tsrc
 
 for {set i 0} {$i<[llength $argv]} {incr i} {
   set x [lindex $argv $i]
-  if {[regexp {^-?-nostatic$} $x]} {
+  if {[regexp {^-?-enable-recover$} $x]} {
+    set enable_recover 1
+  } elseif {[regexp {^-?-nostatic$} $x]} {
     set addstatic 0
   } elseif {[regexp {^-?-linemacros(?:=([01]))?$} $x ma ulm]} {
     if {$ulm == ""} {set ulm 1}
@@ -78,7 +81,9 @@ close $in
 # Open the output file and write a header comment at the beginning
 # of the file.
 #
-set out [open sqlite3.c w]
+set fname sqlite3.c
+if {$enable_recover} { set fname sqlite3r.c }
+set out [open $fname w]
 # Force the output to use unix line endings, even on Windows.
 fconfigure $out -translation lf
 set today [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S UTC" -gmt 1]
@@ -145,6 +150,7 @@ foreach hdr {
    os_setup.h
    os_win.h
    os.h
+   page_header.h
    pager.h
    parse.h
    pcache.h
@@ -164,12 +170,14 @@ foreach hdr {
    whereInt.h
 
    wasm_bindings.h
+   sqlite3recover.h
 } {
   set available_hdr($hdr) 1
 }
 set available_hdr(sqliteInt.h) 0
 set available_hdr(os_common.h) 0
 set available_hdr(sqlite3session.h) 0
+set available_hdr(wasm_bindings.h) 0
 
 # These headers should be copied into the amalgamation without modifying any
 # of their function declarations or definitions.
@@ -327,7 +335,7 @@ proc copy_file {filename} {
 # used subroutines first in order to help the compiler find
 # inlining opportunities.
 #
-foreach file {
+set flist {
    sqliteInt.h
    os_common.h
    ctime.c
@@ -443,7 +451,12 @@ foreach file {
    sqlite3session.c
    fts5.c
    stmt.c
-} {
+   wasmedge_bindings.c
+} 
+if {$enable_recover} {
+  lappend flist sqlite3recover.c dbdata.c
+}
+foreach file $flist {
   copy_file $srcdir/$file
 }
 
