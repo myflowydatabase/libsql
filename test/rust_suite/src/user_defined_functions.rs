@@ -10,14 +10,9 @@ fn fib(n: i32) -> i32 {
     }
 }
 
-extern "C" {
-    fn libsql_try_initialize_wasm_func_table(db: *mut libsqlite3_sys::sqlite3);
-}
-
 #[test]
 fn test_create_drop_fib() {
     let conn = Connection::open_in_memory().unwrap();
-    unsafe { libsql_try_initialize_wasm_func_table(conn.handle()) }
 
     conn.execute("CREATE TABLE t (id)", ()).unwrap();
     for i in 1..7 {
@@ -25,7 +20,7 @@ fn test_create_drop_fib() {
     }
 
     conn.execute(
-        &format!("CREATE FUNCTION fib LANGUAGE wasm AS '{}'", fib_src()),
+        &format!("CREATE FUNCTION fib LANGUAGE wasm AS x'{}'", fib_src()),
         (),
     )
     .unwrap();
@@ -50,7 +45,6 @@ fn test_contains() {
     use itertools::Itertools;
 
     let conn = Connection::open_in_memory().unwrap();
-    unsafe { libsql_try_initialize_wasm_func_table(conn.handle()) }
 
     conn.execute("CREATE TABLE t (a, b)", ()).unwrap();
     for perm in vec!["eenie", "meenie", "miny", "mo", "m", "o"]
@@ -63,7 +57,7 @@ fn test_contains() {
 
     conn.execute(
         &format!(
-            "CREATE FUNCTION contains LANGUAGE wasm AS '{}'",
+            "CREATE FUNCTION contains LANGUAGE wasm AS x'{}'",
             contains_src()
         ),
         (),
@@ -104,7 +98,6 @@ fn test_contains() {
 #[test]
 fn test_concat3() {
     let conn = Connection::open_in_memory().unwrap();
-    unsafe { libsql_try_initialize_wasm_func_table(conn.handle()) }
 
     conn.execute("CREATE TABLE t (a, b)", ()).unwrap();
     conn.execute("INSERT INTO t(a, b) VALUES ('hello', 'world')", ())
@@ -112,7 +105,7 @@ fn test_concat3() {
 
     conn.execute(
         &format!(
-            "CREATE FUNCTION concat3 LANGUAGE wasm AS '{}'",
+            "CREATE FUNCTION concat3 LANGUAGE wasm AS x'{}'",
             concat3_src()
         ),
         (),
@@ -146,7 +139,6 @@ fn test_concat3() {
 #[test]
 fn test_reverse_blob() {
     let conn = Connection::open_in_memory().unwrap();
-    unsafe { libsql_try_initialize_wasm_func_table(conn.handle()) }
 
     conn.execute("CREATE TABLE t (id)", ()).unwrap();
     for vec in [
@@ -161,7 +153,7 @@ fn test_reverse_blob() {
 
     conn.execute(
         &format!(
-            "CREATE FUNCTION reverse_blob LANGUAGE wasm AS '{}'",
+            "CREATE FUNCTION reverse_blob LANGUAGE wasm AS x'{}'",
             reverse_blob_src()
         ),
         (),
@@ -186,11 +178,10 @@ fn test_reverse_blob() {
 #[test]
 fn test_get_null() {
     let conn = Connection::open_in_memory().unwrap();
-    unsafe { libsql_try_initialize_wasm_func_table(conn.handle()) }
 
     conn.execute(
         &format!(
-            "CREATE FUNCTION get_null LANGUAGE wasm AS '{}'",
+            "CREATE FUNCTION get_null LANGUAGE wasm AS x'{}'",
             get_null_src()
         ),
         (),
@@ -210,7 +201,6 @@ fn test_get_null() {
 #[test]
 fn test_explain() {
     let conn = Connection::open_in_memory().unwrap();
-    unsafe { libsql_try_initialize_wasm_func_table(conn.handle()) }
 
     let mut create_stmt = conn
         .prepare("EXPLAIN CREATE FUNCTION mj LANGUAGE wasm AS 'hee-hee'")

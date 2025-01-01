@@ -1,4 +1,5 @@
 mod random_rowid;
+mod virtual_wal;
 
 #[cfg(all(test, feature = "udf"))]
 mod user_defined_functions;
@@ -48,8 +49,8 @@ mod tests {
             .unwrap();
 
         let also_steven = person_iter.next().unwrap().unwrap();
-        println!("Read {:#?}", also_steven);
+        println!("Read {also_steven:#?}");
         assert!(also_steven == steven);
-        assert!(person_iter.next() == None)
+        assert!(person_iter.next().is_none())
     }
 }
